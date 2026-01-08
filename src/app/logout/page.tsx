@@ -4,22 +4,19 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-export default function Home() {
+export default function LogoutPage() {
   const router = useRouter();
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) {
-        router.replace('/login');
-      }
+      await supabase.auth.signOut();
+      router.replace('/login');
     })();
   }, [router]);
 
   return (
     <main style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 800 }}>Dashboard</h1>
-      <p>This replaces page 1-pag.</p>
+      <p>Signing you out…</p>
     </main>
   );
 }
