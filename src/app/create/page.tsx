@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../../lib/supabase';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
+
 
 export default function CreateListingPage() {
   const router = useRouter();
@@ -12,14 +14,21 @@ export default function CreateListingPage() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priceMonthly, setPriceMonthly] = useState<number>(1200);
-  const [beds, setBeds] = useState<number>(1);
-  const [baths, setBaths] = useState<number>(1);
+  const [priceMonthly, setPriceMonthly] = useState<string>('1200');
+  const [beds, setBeds] = useState<string>('1');
+  const [baths, setBaths] = useState<string>('1');
+  const [bedroomSqft, setBedroomSqft] = useState<string>('');
+  const [apartmentSqft, setApartmentSqft] = useState<string>('');
+
+
 
   const [addressText, setAddressText] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [postalCode, setPostalCode] = useState('');
+
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -40,28 +49,62 @@ export default function CreateListingPage() {
         router.replace('/login');
         return;
       }
+      // REQUIRED FIELD CHECKS BEFORE PUBLISH
+    if (!addressText.trim()) {
+    setMsg('❌ Address is required.');
+    setLoading(false);
+    return;
+    }
 
-      const { error } = await supabase.from('listings').insert([
-        {
-          owner_id: user.id,
-          title,
-          description,
-          price_monthly: priceMonthly,
-          beds,
-          baths,
-          address_text: addressText,
-          city,
-          state,
-          postal_code: postalCode || null,
-          country: 'United States',
-          status: 'draft',
-          verified_status: 'unverified',
-        },
-      ]);
+    if (!postalCode.trim()) {
+    setMsg('❌ Postal code is required.');
+    setLoading(false);
+    return;
+    }
+
+
+     const { data: listing, error } = await supabase
+  .from('listings')
+  .insert([
+    {
+      owner_id: user.id,
+      title,
+      description,
+
+      price_monthly: Number(priceMonthly),
+      beds: Number(beds),
+      baths: Number(baths),
+
+      bedroom_sqft: bedroomSqft ? Number(bedroomSqft) : null,
+      apartment_sqft: apartmentSqft ? Number(apartmentSqft) : null,
+
+      address_text: addressText,
+      city,
+      state,
+      postal_code: postalCode,
+      country: 'United States',
+
+      lat,
+      lng,
+
+      status: 'published',
+      published_at: new Date().toISOString(),
+    },
+  ])
+  .select('id')
+  .single();
 
       if (error) throw error;
+      setMsg('✅ Listing published.');
 
-      setMsg('✅ Listing created (draft).');
+if (listing?.id) {
+  router.push(`/listing/${listing.id}`);
+  return;
+}
+router.push('/listings');
+
+
+      setMsg('✅ Listing published..');
       setTitle('');
       setDescription('');
       setAddressText('');
@@ -111,8 +154,8 @@ export default function CreateListingPage() {
             <span>Price / month ($)</span>
             <input
               value={priceMonthly}
-              onChange={(e) => setPriceMonthly(Number(e.target.value))}
-              type="number"
+              onChange={(e) => setPriceMonthly(e.target.value)}
+              type="numeric"
               min={0}
               required
               style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
@@ -123,8 +166,8 @@ export default function CreateListingPage() {
             <span>Beds</span>
             <input
               value={beds}
-              onChange={(e) => setBeds(Number(e.target.value))}
-              type="number"
+              onChange={(e) => setBeds(e.target.value)}
+              type="numeric"
               min={0}
               required
               style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
@@ -135,8 +178,8 @@ export default function CreateListingPage() {
             <span>Baths</span>
             <input
               value={baths}
-              onChange={(e) => setBaths(Number(e.target.value))}
-              type="number"
+              onChange={(e) => setBaths(e.target.value)}
+              type="numeric"
               step="0.5"
               min={0}
               required
@@ -144,17 +187,49 @@ export default function CreateListingPage() {
             />
           </label>
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+  <label style={{ display: 'grid', gap: 6 }}>
+    <span>Bedroom sqft (optional)</span>
+    <input
+      value={bedroomSqft}
+      onChange={(e) => setBedroomSqft(e.target.value)}
+      inputMode="numeric"
+      placeholder="e.g. 140"
+      style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
+    />
+  </label>
+
+  <label style={{ display: 'grid', gap: 6 }}>
+    <span>Apartment sqft (optional)</span>
+    <input
+      value={apartmentSqft}
+      onChange={(e) => setApartmentSqft(e.target.value)}
+      inputMode="numeric"
+      placeholder="e.g. 900"
+      style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
+    />
+  </label>
+</div>
+
 
         <label style={{ display: 'grid', gap: 6 }}>
-          <span>Address (text)</span>
-          <input
-            value={addressText}
-            onChange={(e) => setAddressText(e.target.value)}
-            required
-            placeholder="123 Main St, Apt 4B"
-            style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
-          />
+  <span>Address</span>
+  <AddressAutocomplete
+    value={addressText}
+    onChange={setAddressText}
+  onPick={(p: { address: string; city: string; state: string; postalCode: string; lat: number | null; lng: number | null }) => {
+
+    setAddressText(p.address);
+    setCity(p.city);
+    setState(p.state);
+    setPostalCode(p.postalCode);
+    setLat(p.lat);
+    setLng(p.lng);
+  }}
+/>
+
         </label>
+
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <label style={{ display: 'grid', gap: 6 }}>
@@ -179,10 +254,11 @@ export default function CreateListingPage() {
           </label>
 
           <label style={{ display: 'grid', gap: 6 }}>
-            <span>ZIP (optional)</span>
+            <span>Postal Code</span>
             <input
               value={postalCode}
               onChange={(e) => setPostalCode(e.target.value)}
+              required
               style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
             />
           </label>
@@ -201,7 +277,7 @@ export default function CreateListingPage() {
             cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-          {loading ? 'Creating…' : 'Create draft listing'}
+          {loading ? 'Punlishing' : 'Publish listing'}
         </button>
 
         {msg && <p style={{ marginTop: 4 }}>{msg}</p>}
