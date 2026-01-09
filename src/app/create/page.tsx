@@ -63,7 +63,7 @@ export default function CreateListingPage() {
     }
 
 
-     const { data: listing, error } = await supabase
+    const { data: listing, error } = await supabase
   .from('listings')
   .insert([
     {
@@ -94,13 +94,12 @@ export default function CreateListingPage() {
   .select('id')
   .single();
 
-      if (error) throw error;
-      setMsg('✅ Listing published.');
 
-if (listing?.id) {
-  router.push(`/listing/${listing.id}`);
-  return;
-}
+    if (error) throw error;
+    setMsg('✅ Listing published.');
+    router.push(`/create/photos?listingId=${listing.id}`);
+    return;
+
 router.push('/listings');
 
 
@@ -111,6 +110,12 @@ router.push('/listings');
       setCity('');
       setState('');
       setPostalCode('');
+      setPriceMonthly('');
+      setBeds('');
+      setBaths('');
+      setBedroomSqft('');
+      setApartmentSqft('');
+
     } catch (err: any) {
       setMsg(err?.message ?? 'Something went wrong.');
     } finally {
@@ -155,7 +160,7 @@ router.push('/listings');
             <input
               value={priceMonthly}
               onChange={(e) => setPriceMonthly(e.target.value)}
-              type="numeric"
+              type="number"
               min={0}
               required
               style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
@@ -167,7 +172,7 @@ router.push('/listings');
             <input
               value={beds}
               onChange={(e) => setBeds(e.target.value)}
-              type="numeric"
+              type="number"
               min={0}
               required
               style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
@@ -179,7 +184,7 @@ router.push('/listings');
             <input
               value={baths}
               onChange={(e) => setBaths(e.target.value)}
-              type="numeric"
+              type="number"
               step="0.5"
               min={0}
               required
@@ -277,7 +282,7 @@ router.push('/listings');
             cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-          {loading ? 'Punlishing' : 'Publish listing'}
+          {loading ? 'Punlishing' : 'Next Page'}
         </button>
 
         {msg && <p style={{ marginTop: 4 }}>{msg}</p>}
