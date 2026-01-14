@@ -17,50 +17,36 @@ type Photo = {
   listing_id: string;
   room: 'kitchen' | 'bedroom' | 'bathroom' | 'living_room' | string;
   storage_path: string;
-  created_at: string;
 };
-
 
 const ROOM_ORDER = ['kitchen', 'bedroom', 'bathroom', 'living_room'] as const;
 
 function pickPreviewPhotos(all: Photo[], max = 4) {
-  // Goal:
-  // 1) pick 1 from each room if available (kitchen, bedroom, bathroom, living_room)
-  // 2) if some rooms missing, fill with other photos they did upload
   const chosen: Photo[] = [];
-  const usedUrls = new Set<string>();
+  const usedPaths = new Set<string>();
 
-  // group by room
   const byRoom: Record<string, Photo[]> = {};
   for (const p of all) {
     byRoom[p.room] = byRoom[p.room] || [];
     byRoom[p.room].push(p);
   }
-  // sort each room by created_at (oldest first, doesn’t matter much)
-  for (const r of Object.keys(byRoom)) {
-    byRoom[r].sort((a, b) => (a.created_at > b.created_at ? 1 : -1));
-  }
 
-  // 1) one per preferred room
   for (const room of ROOM_ORDER) {
-  const first = byRoom[room]?.[0];
-  if (first && !usedUrls.has(first.storage_path) && chosen.length < max) {
-    chosen.push(first);
-    usedUrls.add(first.storage_path);
+    const first = byRoom[room]?.[0];
+    if (first && !usedPaths.has(first.storage_path) && chosen.length < max) {
+      chosen.push(first);
+      usedPaths.add(first.storage_path);
+    }
   }
-}
 
-// 2) fill with remaining photos from anywhere
-if (chosen.length < max) {
-  const remaining = all.filter((p) => !usedUrls.has(p.storage_path));
-  remaining.sort((a, b) => (a.created_at > b.created_at ? 1 : -1));
-  for (const p of remaining) {
-    if (chosen.length >= max) break;
-    chosen.push(p);
-    usedUrls.add(p.storage_path);
+  if (chosen.length < max) {
+    const remaining = all.filter((p) => !usedPaths.has(p.storage_path));
+    for (const p of remaining) {
+      if (chosen.length >= max) break;
+      chosen.push(p);
+      usedPaths.add(p.storage_path);
+    }
   }
-}
-
 
   return chosen;
 }
@@ -73,60 +59,87 @@ export default function ListingsPage() {
   const [photosByListing, setPhotosByListing] = useState<Record<string, Photo[]>>({});
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+
+    async function run() {
       setLoading(true);
       setMsg(null);
 
-      // 1) Get published listings
-      const { data: listingData, error: listingErr } = await supabase
-        .from('listings')
-        .select('id,title,city,state,price_monthly,published_at')
-        .eq('status', 'published')
-        .order('published_at', { ascending: false });
+      // Hard timeout so it never hangs forever
+      const timeout = setTimeout(() => {
+        if (!cancelled) {
+          setMsg('Still loading… If this never finishes, it means the Supabase request is hanging.');
+          setLoading(false);
+        }
+      }, 6000);
 
-      if (listingErr) {
-        setMsg(listingErr.message);
-        setListings([]);
-        setPhotosByListing({});
+      try {
+        // 1) Listings
+        const { data: listingData, error: listingErr } = await supabase
+          .from('listings')
+          .select('id,title,city,state,price_monthly,published_at')
+          .eq('status', 'published')
+          .order('published_at', { ascending: false });
+
+        if (cancelled) return;
+
+        if (listingErr) {
+          clearTimeout(timeout);
+          setMsg(`Listings error: ${listingErr.message}`);
+          setListings([]);
+          setPhotosByListing({});
+          setLoading(false);
+          return;
+        }
+
+        const list = (listingData ?? []) as Listing[];
+        setListings(list);
+
+        const ids = list.map((l) => l.id);
+        if (ids.length === 0) {
+          clearTimeout(timeout);
+          setPhotosByListing({});
+          setLoading(false);
+          return;
+        }
+
+        // 2) Photos
+        const { data: photoData, error: photoErr } = await supabase
+          .from('listing_photos')
+          .select('listing_id,room,storage_path')
+          .in('listing_id', ids);
+
+        if (cancelled) return;
+
+        if (photoErr) {
+          clearTimeout(timeout);
+          setMsg(`Photos error: ${photoErr.message}`);
+          setPhotosByListing({});
+          setLoading(false);
+          return;
+        }
+
+        const photos = (photoData ?? []) as Photo[];
+        const grouped: Record<string, Photo[]> = {};
+        for (const p of photos) {
+          grouped[p.listing_id] = grouped[p.listing_id] || [];
+          grouped[p.listing_id].push(p);
+        }
+
+        clearTimeout(timeout);
+        setPhotosByListing(grouped);
         setLoading(false);
-        return;
-      }
-
-      const list = (listingData ?? []) as Listing[];
-      setListings(list);
-
-      // 2) Get photos for these listings (if any)
-      const ids = list.map((l) => l.id);
-      if (ids.length === 0) {
-        setPhotosByListing({});
+      } catch (e: any) {
+        if (cancelled) return;
+        setMsg(e?.message ?? 'Unknown error while loading listings.');
         setLoading(false);
-        return;
       }
+    }
 
-     const { data: photoData, error: photoErr } = await supabase
-  .from('listing_photos')
-  .select('listing_id,room,storage_path,created_at')
-        .in('listing_id', ids)
-        .order('created_at', { ascending: true });
-
-      if (photoErr) {
-        // still show listings even if photos fail
-        setPhotosByListing({});
-        setLoading(false);
-        return;
-      }
-
-      const photos = (photoData ?? []) as Photo[];
-      console.log("photoData length:", photos.length, photos);
-      const grouped: Record<string, Photo[]> = {};
-      for (const p of photos) {
-        grouped[p.listing_id] = grouped[p.listing_id] || [];
-        grouped[p.listing_id].push(p);
-      }
-      setPhotosByListing(grouped);
-
-      setLoading(false);
-    })();
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const cards = useMemo(() => {
@@ -156,7 +169,6 @@ export default function ListingsPage() {
               gap: 10,
             }}
           >
-            {/* Thumbnails row */}
             {previews.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                 {Array.from({ length: 4 }).map((_, i) => {
@@ -174,16 +186,15 @@ export default function ListingsPage() {
                       }}
                     >
                       {p ? (
-                       <img
-  src={
-    supabase.storage
-      .from('listing-photos')
-      .getPublicUrl(p.storage_path).data.publicUrl
-  }
-  alt={p.room}
-  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-/>
-
+                        <img
+                          src={
+                            supabase.storage
+                              .from('listing-photos')
+                              .getPublicUrl(p.storage_path).data.publicUrl
+                          }
+                          alt={p.room}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
                       ) : null}
                     </div>
                   );
@@ -193,7 +204,6 @@ export default function ListingsPage() {
               <div style={{ opacity: 0.7 }}>No photos uploaded.</div>
             )}
 
-            {/* Info */}
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <div style={{ fontWeight: 800, fontSize: 18 }}>
                 {String(listing.title ?? 'Untitled listing')}
@@ -207,17 +217,15 @@ export default function ListingsPage() {
               {[listing.city, listing.state].filter(Boolean).join(', ')}
             </div>
 
-            {/* View opens in a new tab */}
-            <Link
-              href={`/listings/${listing.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ fontWeight: 800 }}
-            >
+            <Link href={`/listings/${listing.id}`} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 800 }}>
               View
             </Link>
           </div>
         ))}
+
+        {!loading && !msg && cards.length === 0 && (
+          <p style={{ opacity: 0.8 }}>No published listings found.</p>
+        )}
       </div>
     </main>
   );
