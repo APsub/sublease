@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
-import AddressAutocomplete from '../../components/AddressAutocomplete';
+import dynamic from 'next/dynamic';
+
+const AddressAutocomplete = dynamic(
+  () => import('../../components/AddressAutocomplete'),
+  { ssr: false }
+);
 
 
 export default function CreateListingPage() {
@@ -14,9 +19,9 @@ export default function CreateListingPage() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priceMonthly, setPriceMonthly] = useState<string>('1200');
-  const [beds, setBeds] = useState<string>('1');
-  const [baths, setBaths] = useState<string>('1');
+  const [priceMonthly, setPriceMonthly] = useState<string>('');
+  const [beds, setBeds] = useState<string>('');
+  const [baths, setBaths] = useState<string>(''); 
   const [bedroomSqft, setBedroomSqft] = useState<string>('');
   const [apartmentSqft, setApartmentSqft] = useState<string>('');
 
@@ -100,6 +105,7 @@ export default function CreateListingPage() {
     router.push(`/create/photos?listingId=${listing.id}`);
     return;
 
+
 router.push('/listings');
 
 
@@ -161,6 +167,7 @@ router.push('/listings');
               value={priceMonthly}
               onChange={(e) => setPriceMonthly(e.target.value)}
               type="number"
+              placeholder = "e.g. 1200"
               min={0}
               required
               style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
@@ -173,6 +180,8 @@ router.push('/listings');
               value={beds}
               onChange={(e) => setBeds(e.target.value)}
               type="number"
+              placeholder = "e.g. 4"
+
               min={0}
               required
               style={{ padding: 10, border: '1px solid #ccc', borderRadius: 10 }}
@@ -185,6 +194,7 @@ router.push('/listings');
               value={baths}
               onChange={(e) => setBaths(e.target.value)}
               type="number"
+              placeholder = "e.g. 4"
               step="0.5"
               min={0}
               required

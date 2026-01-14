@@ -21,6 +21,7 @@ export default function AddPhotosPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const listingId = searchParams.get('listingId') || '';
+  
 
   const [filesByRoom, setFilesByRoom] = useState<Record<RoomKey, File[]>>({
     kitchen: [],
@@ -31,6 +32,8 @@ export default function AddPhotosPage() {
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [completed, setCompleted] = useState(false);
+
 
   const previews = useMemo(() => {
     return {
@@ -72,6 +75,9 @@ export default function AddPhotosPage() {
   }
 
   async function handleFinish() {
+    const { data: authData } = await supabase.auth.getUser();
+console.log('AUTH USER:', authData.user);
+
     if (!listingId) {
       setMsg('Missing listingId in URL. Go back and publish again.');
       return;
@@ -86,7 +92,7 @@ export default function AddPhotosPage() {
         router.replace('/login');
         return;
       }
-
+      console.log("AUTH USER ID:", userData.user.id);
       const allUploads: { room: string; url: string; path: string }[] = [];
       for (const room of Object.keys(filesByRoom) as RoomKey[]) {
         const roomFiles = filesByRoom[room];
@@ -94,6 +100,9 @@ export default function AddPhotosPage() {
         const uploaded = await uploadRoom(room, roomFiles);
         allUploads.push(...uploaded);
       }
+
+      const { data: u } = await supabase.auth.getUser();
+    console.log("USER:", u.user?.id);
 
       // OPTIONAL: save photo records to a table if you have one
       // If you DON'T have listing_photos table, you can skip this insert.
@@ -113,14 +122,62 @@ export default function AddPhotosPage() {
         if (error) throw error;
       }
 
-      setMsg('✅ Photos saved.');
-      router.push(`/listings/${listingId}`);
+      setCompleted(true);
+      setMsg('🎉 Congrats! You have published your listing.');
     } catch (e: any) {
       setMsg(e?.message ?? 'Upload failed.');
     } finally {
       setLoading(false);
     }
   }
+if (completed) {
+  return (
+    <main style={{ maxWidth: 900, margin: '40px auto', padding: 16 }}>
+      <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>
+        🎉 Congrats!
+      </h1>
+
+      <p style={{ opacity: 0.9, marginBottom: 20 }}>
+        You have published your listing and it is now live for others to see.
+      </p>
+
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button
+          type="button"
+          onClick={() => router.push('/')}
+          style={{
+            padding: 12,
+            borderRadius: 12,
+            border: '1px solid #111',
+            background: '#111',
+            color: 'white',
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          Go to homepage
+        </button>
+
+        <button
+          type="button"
+          onClick={() => router.push(`/listings/${listingId}`)}
+          style={{
+            padding: 12,
+            borderRadius: 12,
+            border: '1px solid #999',
+            background: 'white',
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          View listing
+        </button>
+      </div>
+
+      {msg && <p style={{ marginTop: 12 }}>{msg}</p>}
+    </main>
+  );
+}
 
   return (
     <main style={{ maxWidth: 900, margin: '40px auto', padding: 16 }}>
@@ -202,7 +259,7 @@ export default function AddPhotosPage() {
             cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-          {loading ? 'Saving…' : 'Finish'}
+          {loading ? 'Saving…' : 'Publish'}
         </button>
       </div>
 

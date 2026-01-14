@@ -40,7 +40,7 @@ export default function Home() {
             <Link className="text-sm font-medium text-gray-700 hover:text-black" href="/create">
               Create listing
             </Link>
-            <Link className="text-sm font-medium text-gray-700 hover:text-black" href="/search">
+            <Link className="text-sm font-medium text-gray-700 hover:text-black" href="/listings">
               Browse
             </Link>
             <Link className="text-sm font-medium text-gray-700 hover:text-black" href="/messages">
@@ -81,7 +81,7 @@ export default function Home() {
                 Create a listing
               </Link>
               <Link
-                href="/search"
+                href="/listings"
                 className="rounded-2xl border px-6 py-3 text-sm font-semibold hover:bg-gray-50"
               >
                 Browse listings
@@ -115,7 +115,7 @@ export default function Home() {
                   ➕ Create a new listing
                 </Link>
                 <Link
-                  href="/search"
+                  href="/listings"
                   className="rounded-2xl border px-4 py-3 text-sm font-semibold hover:bg-gray-50"
                 >
                   🔎 Browse listings
